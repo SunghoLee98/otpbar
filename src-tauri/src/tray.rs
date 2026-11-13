@@ -49,11 +49,29 @@ fn code_rows() -> &'static Mutex<Vec<CodeRow>> {
 
 /// `CmdOrCtrl+Shift+O`를 그 기기에서 실제로 누르는 모양으로 바꾼다.
 fn pretty_combo(combo: &str) -> String {
+    // macOS 관례대로 ⌃⌥⇧⌘ 순서로 적는다.
     #[cfg(target_os = "macos")]
-    let s = combo
-        .replace("CmdOrCtrl", "⌘")
-        .replace("Shift", "⇧")
-        .replace('+', "");
+    let s = {
+        let parts: Vec<&str> = combo.split('+').collect();
+        let has = |names: &[&str]| parts.iter().any(|p| names.contains(p));
+        let mut out = String::new();
+        if has(&["Ctrl", "Control"]) {
+            out.push('⌃');
+        }
+        if has(&["Alt", "Option"]) {
+            out.push('⌥');
+        }
+        if has(&["Shift"]) {
+            out.push('⇧');
+        }
+        if has(&["CmdOrCtrl", "CommandOrControl", "Cmd", "Command", "Super"]) {
+            out.push('⌘');
+        }
+        if let Some(key) = parts.last() {
+            out.push_str(key);
+        }
+        out
+    };
     #[cfg(not(target_os = "macos"))]
     let s = combo.replace("CmdOrCtrl", "Ctrl");
     s
