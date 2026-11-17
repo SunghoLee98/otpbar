@@ -255,16 +255,6 @@ impl AppState {
         self.set_settings(s).ok();
     }
 
-    /// 기억을 비운다. 계정이 사라진 경우에 부른다.
-    pub fn forget_last_used(&self) {
-        let mut s = self.settings();
-        if s.last_used_id.is_none() {
-            return;
-        }
-        s.last_used_id = None;
-        self.set_settings(s).ok();
-    }
-
     /// 마지막 조작 이후 지난 시간(초).
     pub fn idle_secs(&self) -> u64 {
         self.lock_inner().last_activity.elapsed().as_secs()

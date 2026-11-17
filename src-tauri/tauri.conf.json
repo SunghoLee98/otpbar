@@ -1,13 +1,14 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "OTPBar",
-  "version": "2.4.0",
+  "version": "2.5.0",
   "identifier": "com.bamin0422.otpbar",
   "build": {
     "frontendDist": "../src"
   },
   "app": {
     "withGlobalTauri": true,
+    "macOSPrivateApi": true,
     "windows": [],
     "security": {
       "csp": "default-src 'self'; script-src 'self'; style-src 'self'; connect-src ipc: http://ipc.localhost"

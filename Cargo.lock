@@ -3275,7 +3275,7 @@ dependencies = [
 
 [[package]]
 name = "otpbar-app"
-version = "2.4.0"
+version = "2.5.0"
 dependencies = [
  "otpbar-core",
  "serde",
@@ -3294,7 +3294,7 @@ dependencies = [
 
 [[package]]
 name = "otpbar-cli"
-version = "2.4.0"
+version = "2.5.0"
 dependencies = [
  "clap",
  "otpbar-core",
@@ -3305,7 +3305,7 @@ dependencies = [
 
 [[package]]
 name = "otpbar-core"
-version = "2.4.0"
+version = "2.5.0"
 dependencies = [
  "anyhow",
  "argon2",
