@@ -34,11 +34,11 @@ pub struct Settings {
     pub clipboard_clear_secs: u64,
     /// 업데이트를 자동으로 확인한다.
     pub auto_update_check: bool,
-    /// 전역 단축키로 마지막에 쓴 계정의 코드를 복사한다.
+    /// 전역 단축키로 빠른 복사 창을 연다.
     pub hotkey_enabled: bool,
     /// 전역 단축키 조합. Tauri 표기법을 쓴다(예: `CmdOrCtrl+Shift+O`).
     pub hotkey: String,
-    /// 단축키가 꺼낼 계정. 코드를 복사할 때마다 갱신한다.
+    /// 마지막에 복사한 계정. 코드를 복사할 때마다 갱신한다.
     pub last_used_id: Option<String>,
 }
 

@@ -9,6 +9,7 @@ mod dashboard;
 mod hotkey;
 mod log;
 mod prompt;
+mod quick;
 mod state;
 mod tray;
 mod ui;
@@ -34,6 +35,9 @@ pub fn run() {
             dashboard::dashboard_toggle_mask,
             dashboard::dashboard_retry_tray,
             dashboard::dashboard_check_update,
+            quick::quick_list,
+            quick::quick_copy,
+            quick::quick_hide,
         ])
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
