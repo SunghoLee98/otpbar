@@ -279,7 +279,7 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
         .build(app)?;
     let hotkey = CheckMenuItemBuilder::with_id(
         ID_HOTKEY,
-        format!("단축키로 복사 ({})", pretty_combo(&settings.hotkey)),
+        format!("빠른 복사 단축키 ({})", pretty_combo(&settings.hotkey)),
     )
     .checked(settings.hotkey_enabled)
     .build(app)?;
