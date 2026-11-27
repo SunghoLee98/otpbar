@@ -20,6 +20,14 @@ pub enum Error {
     #[error("계정이 여러 개 일치합니다: {0}")]
     Ambiguous(String),
 
+    /// 같은 발급자에 같은 이름의 계정이 이미 있다. 값은 표시용 이름(`발급자 · 이름`).
+    #[error("같은 이름의 계정이 이미 있습니다: {0}")]
+    DuplicateName(String),
+
+    /// 계정 이름으로 쓸 수 없는 값(빈 이름, 너무 긴 이름).
+    #[error("{0}")]
+    InvalidName(String),
+
     #[error("비밀키 형식 오류: {0}")]
     InvalidSecret(String),
 

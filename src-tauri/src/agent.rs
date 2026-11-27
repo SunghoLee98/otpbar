@@ -122,11 +122,11 @@ fn dispatch(app: &AppHandle, state: &AppState, request: Request) -> Result<Respo
         Request::Import { source, replace } => {
             state.require_unlocked()?;
             state.touch();
-            let (messages, total) = state.import(&source, replace)?;
+            let report = state.import(&source, replace)?;
             ui::refresh(app);
             Ok(Response::Imported {
-                messages,
-                added: total,
+                messages: report.messages,
+                added: report.added,
             })
         }
 

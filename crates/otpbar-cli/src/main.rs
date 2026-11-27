@@ -190,10 +190,7 @@ fn run(cli: &Cli) -> Result<(), Error> {
             })?;
             match resp {
                 Response::Imported { messages, added } => {
-                    for m in messages {
-                        println!("{m}");
-                    }
-                    println!("가져오기 완료: {added}개 추가·갱신");
+                    print_import_result(&messages, added);
                     Ok(())
                 }
                 other => unexpected(other),
@@ -305,6 +302,23 @@ fn print_list(items: &[ListItem], json: bool) {
     }
 }
 
+/// 가져오기 결과. 건너뛴 계정이 있으면 무엇을 하면 되는지 함께 알린다.
+fn print_import_result(messages: &[String], added: usize) {
+    for m in messages {
+        println!("{m}");
+    }
+    let skipped = messages.len().saturating_sub(added);
+    if skipped == 0 {
+        println!("가져오기 완료: {added}개 추가·갱신");
+        return;
+    }
+    println!("가져오기 완료: {added}개 추가·갱신, {skipped}개 건너뜀");
+    eprintln!(
+        "같은 이름 때문에 건너뛴 계정은 앱의 'QR 이미지에서 가져오기…'에서 다른 이름으로 \
+         등록하거나, --replace 로 덮어쓰십시오."
+    );
+}
+
 // ---------- 오프라인 모드 ----------
 
 fn run_offline(cli: &Cli) -> Result<(), Error> {
@@ -363,11 +377,8 @@ fn run_offline(cli: &Cli) -> Result<(), Error> {
         }
         Command::Import { source, replace } => {
             let accounts = otpbar_core::ipc::import_source_to_accounts(source)?;
-            let added = accounts.len();
-            for m in vault.add_many(accounts, *replace)? {
-                println!("{m}");
-            }
-            println!("가져오기 완료: {added}건 처리");
+            let report = vault.add_many(accounts, *replace)?;
+            print_import_result(&report.messages, report.added);
         }
         Command::Show | Command::Lock | Command::Init | Command::Unlock => {
             return Err(Error::other("오프라인 모드에서는 쓸 수 없는 명령입니다"));

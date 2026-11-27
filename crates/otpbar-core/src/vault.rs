@@ -34,13 +34,37 @@ pub struct Account {
     pub added: String,
 }
 
+/// 계정 이름의 최대 길이(글자 수). QR에서 읽은 이름도 이 길이로 자른다.
+pub const MAX_NAME_LEN: usize = 120;
+
+/// 표시용 이름. 발급자가 없으면 이름만 쓴다.
+pub fn label(issuer: &str, name: &str) -> String {
+    if issuer.is_empty() {
+        name.to_string()
+    } else {
+        format!("{issuer} · {name}")
+    }
+}
+
+/// 사람이 정한 계정 이름이 쓸 수 있는 값인지 본다. 앞뒤 공백은 호출자가 걷어 낸다.
+///
+/// QR에서 읽은 이름에는 적용하지 않는다. 발급자만 있고 이름이 빈 QR도 있어서, 여기서
+/// 막으면 지금까지 가져오던 것을 못 가져오게 된다.
+pub fn validate_name(name: &str) -> Result<()> {
+    if name.trim().is_empty() {
+        return Err(Error::InvalidName("이름을 비울 수 없습니다".into()));
+    }
+    if name.chars().count() > MAX_NAME_LEN {
+        return Err(Error::InvalidName(format!(
+            "이름은 {MAX_NAME_LEN}자까지 쓸 수 있습니다"
+        )));
+    }
+    Ok(())
+}
+
 impl Account {
     pub fn label(&self) -> String {
-        if self.issuer.is_empty() {
-            self.name.clone()
-        } else {
-            format!("{} · {}", self.issuer, self.name)
-        }
+        label(&self.issuer, &self.name)
     }
 
     pub fn code(&self) -> Result<String> {
@@ -106,6 +130,15 @@ impl NewAccount {
         totp::decode_secret(&self.secret)?;
         Ok(())
     }
+}
+
+/// [`Vault::add_many`]의 결과.
+#[derive(Debug, Clone, Default)]
+pub struct AddReport {
+    /// 계정마다 한 줄. "등록: …" 또는 "건너뜀: … — 이유".
+    pub messages: Vec<String>,
+    /// 실제로 들어간(덮어쓴 것 포함) 계정 수. 건너뛴 것은 세지 않는다.
+    pub added: usize,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -401,22 +434,37 @@ impl Vault {
         Ok((acc.view(), code, acc.remaining()))
     }
 
+    /// 같은 발급자에 같은 이름의 계정이 있으면 그 id.
+    fn id_with_name(&self, issuer: &str, name: &str) -> Result<Option<String>> {
+        Ok(self
+            .data()?
+            .accounts
+            .iter()
+            .find(|a| a.issuer == issuer && a.name == name)
+            .map(|a| a.id.clone()))
+    }
+
+    /// 새 계정에 이 이름을 붙일 수 있는지 본다. 형식이 틀리면 [`Error::InvalidName`],
+    /// 같은 발급자에 같은 이름이 있으면 [`Error::DuplicateName`]이다.
+    ///
+    /// 등록 전에 사용자에게 이름을 받을 때 쓴다. 비밀키를 건드리지 않으므로 입력을
+    /// 다시 받는 동안 계정 데이터를 복사해 둘 필요가 없다.
+    pub fn check_name(&self, issuer: &str, name: &str) -> Result<()> {
+        validate_name(name)?;
+        if self.id_with_name(issuer, name)?.is_some() {
+            return Err(Error::DuplicateName(label(issuer, name)));
+        }
+        Ok(())
+    }
+
     /// 계정을 추가한다. 같은 발급자·이름이 있으면 `replace`가 참일 때만 덮어쓴다.
     pub fn add(&mut self, new: NewAccount, replace: bool) -> Result<String> {
         new.validate()?;
         let existing_ids: Vec<String> =
             self.data()?.accounts.iter().map(|a| a.id.clone()).collect();
-        let dup = self
-            .data()?
-            .accounts
-            .iter()
-            .find(|a| a.issuer == new.issuer && a.name == new.name)
-            .map(|a| a.id.clone());
+        let dup = self.id_with_name(&new.issuer, &new.name)?;
         if dup.is_some() && !replace {
-            return Err(Error::other(format!(
-                "이미 있는 계정입니다: {} · {}",
-                new.issuer, new.name
-            )));
+            return Err(Error::DuplicateName(label(&new.issuer, &new.name)));
         }
         let id = dup
             .clone()
@@ -461,35 +509,48 @@ impl Vault {
         issuer: Option<String>,
         name: Option<String>,
     ) -> Result<AccountView> {
-        let id = self.find(query)?.id.clone();
+        if let Some(n) = &name {
+            validate_name(n)?;
+        }
+        let current = self.find(query)?;
+        let id = current.id.clone();
+        let issuer = issuer.unwrap_or_else(|| current.issuer.clone());
+        let name = name.unwrap_or_else(|| current.name.clone());
+        // 이름을 바꿔서 다른 계정과 겹치게 만들 수도 없다. 자기 자신과 같은 것은 괜찮다.
+        if matches!(self.id_with_name(&issuer, &name)?, Some(other) if other != id) {
+            return Err(Error::DuplicateName(label(&issuer, &name)));
+        }
         let data = self.data.as_mut().ok_or(Error::Locked)?;
         let acc = data
             .accounts
             .iter_mut()
             .find(|a| a.id == id)
             .ok_or(Error::AccountNotFound(id.clone()))?;
-        if let Some(i) = issuer {
-            acc.issuer = i;
-        }
-        if let Some(n) = name {
-            acc.name = n;
-        }
+        acc.issuer = issuer;
+        acc.name = name;
         let view = acc.view();
         self.save()?;
         Ok(view)
     }
 
-    /// 여러 계정을 한 번에 넣는다(QR 가져오기). 결과 메시지를 계정마다 돌려준다.
-    pub fn add_many(&mut self, items: Vec<NewAccount>, replace: bool) -> Result<Vec<String>> {
-        let mut messages = Vec::new();
+    /// 여러 계정을 한 번에 넣는다(CLI의 QR 가져오기). 이름을 묻지 않으므로 같은 이름이
+    /// 있으면 `replace`가 아닌 한 건너뛴다. 결과는 계정마다 한 줄씩 남긴다.
+    pub fn add_many(&mut self, items: Vec<NewAccount>, replace: bool) -> Result<AddReport> {
+        let mut report = AddReport::default();
         for item in items {
-            let label = format!("{} · {}", item.issuer, item.name);
+            let shown = label(&item.issuer, &item.name);
             match self.add(item, replace) {
-                Ok(id) => messages.push(format!("등록: {label} (id={id})")),
-                Err(e) => messages.push(format!("건너뜀: {label} — {e}")),
+                Ok(id) => {
+                    report.added += 1;
+                    report.messages.push(format!("등록: {shown} (id={id})"));
+                }
+                Err(Error::DuplicateName(_)) => report.messages.push(format!(
+                    "건너뜀: {shown} — 같은 이름의 계정이 이미 있습니다"
+                )),
+                Err(e) => report.messages.push(format!("건너뜀: {shown} — {e}")),
             }
         }
-        Ok(messages)
+        Ok(report)
     }
 }
 
@@ -634,9 +695,99 @@ mod tests {
         let mut v = tmp.vault();
         v.create("correct horse battery").unwrap();
         v.add(sample(), false).unwrap();
-        assert!(v.add(sample(), false).is_err());
+        assert!(matches!(
+            v.add(sample(), false),
+            Err(Error::DuplicateName(label)) if label == "authentik · bamin0422"
+        ));
         v.add(sample(), true).unwrap();
         assert_eq!(v.accounts().unwrap().len(), 1);
+    }
+
+    /// 앱이 이름을 물을 때 쓰는 검사. 같은 이름은 막고, 바꾼 이름은 통과시킨다.
+    #[test]
+    fn check_name_flags_duplicates_and_bad_names() {
+        let tmp = TempVault::new("checkname");
+        let mut v = tmp.vault();
+        v.create("correct horse battery").unwrap();
+        v.add(sample(), false).unwrap();
+
+        assert!(matches!(
+            v.check_name("authentik", "bamin0422"),
+            Err(Error::DuplicateName(_))
+        ));
+        // 발급자가 다르면 같은 이름이어도 다른 계정이다
+        v.check_name("github", "bamin0422").unwrap();
+        v.check_name("authentik", "업무용").unwrap();
+
+        assert!(matches!(
+            v.check_name("authentik", "   "),
+            Err(Error::InvalidName(_))
+        ));
+        let long = "가".repeat(MAX_NAME_LEN + 1);
+        assert!(matches!(
+            v.check_name("authentik", &long),
+            Err(Error::InvalidName(_))
+        ));
+        v.check_name("authentik", &"가".repeat(MAX_NAME_LEN))
+            .unwrap();
+    }
+
+    /// 이름을 바꿔 다시 넣으면 두 계정이 모두 남는다. 이번 변경의 핵심 흐름이다.
+    #[test]
+    fn same_qr_name_can_be_added_under_another_name() {
+        let tmp = TempVault::new("rename-on-add");
+        let mut v = tmp.vault();
+        v.create("correct horse battery").unwrap();
+        v.add(sample(), false).unwrap();
+
+        let mut second = sample();
+        second.secret = "GEZDGNBVGY3TQOJQ".into();
+        assert!(v.check_name(&second.issuer, &second.name).is_err());
+        second.name = "bamin0422 (업무)".into();
+        v.check_name(&second.issuer, &second.name).unwrap();
+        v.add(second, false).unwrap();
+
+        let names: Vec<String> = v.accounts().unwrap().into_iter().map(|a| a.name).collect();
+        assert_eq!(names, ["bamin0422", "bamin0422 (업무)"]);
+    }
+
+    #[test]
+    fn add_many_counts_only_what_was_added() {
+        let tmp = TempVault::new("addmany");
+        let mut v = tmp.vault();
+        v.create("correct horse battery").unwrap();
+        v.add(sample(), false).unwrap();
+
+        let mut fresh = sample();
+        fresh.name = "second".into();
+        let report = v.add_many(vec![sample(), fresh], false).unwrap();
+        assert_eq!(report.added, 1, "같은 이름은 건너뛰었으니 세지 않는다");
+        assert_eq!(report.messages.len(), 2);
+        assert!(report.messages[0].starts_with("건너뜀: authentik · bamin0422"));
+        assert!(report.messages[1].starts_with("등록: authentik · second"));
+    }
+
+    #[test]
+    fn rename_cannot_collide_with_another_account() {
+        let tmp = TempVault::new("rename-dup");
+        let mut v = tmp.vault();
+        v.create("correct horse battery").unwrap();
+        v.add(sample(), false).unwrap();
+        let mut other = sample();
+        other.name = "second".into();
+        v.add(other, false).unwrap();
+
+        assert!(matches!(
+            v.rename("authentik-second", None, Some("bamin0422".into())),
+            Err(Error::DuplicateName(_))
+        ));
+        assert!(matches!(
+            v.rename("authentik-second", None, Some(" ".into())),
+            Err(Error::InvalidName(_))
+        ));
+        // 자기 이름 그대로 두는 것은 겹침이 아니다
+        v.rename("authentik-second", None, Some("second".into()))
+            .unwrap();
     }
 
     #[test]

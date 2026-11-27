@@ -13,7 +13,8 @@ use crate::vault::NewAccount;
 const MAX_QR_PER_IMAGE: usize = 16;
 /// 내보내기 QR 하나에 담을 수 있는 계정 수 상한.
 const MAX_ACCOUNTS_PER_PAYLOAD: usize = 256;
-const MAX_LABEL_LEN: usize = 120;
+/// 발급자·이름 길이 상한. 사람이 입력하는 이름과 같은 기준을 쓴다.
+const MAX_LABEL_LEN: usize = crate::vault::MAX_NAME_LEN;
 
 /// 이미지 파일에서 QR 문자열을 모두 읽는다.
 pub fn decode_image(path: &std::path::Path) -> Result<Vec<String>> {

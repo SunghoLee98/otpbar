@@ -312,7 +312,7 @@ fn handle(app: &AppHandle, id: &str) {
             ui::notify(app, "OTPBar", "잠갔습니다. 메뉴에서 다시 열 수 있습니다.");
         }
         ID_DASHBOARD => crate::dashboard::open(app, crate::dashboard::Reason::User),
-        ID_IMPORT => crate::import_via_dialog(app),
+        ID_IMPORT => crate::import::via_dialog(app),
         ID_MASK => {
             let state = app.state::<AppState>();
             let mut s = state.settings();

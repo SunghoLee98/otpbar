@@ -7,6 +7,7 @@
 mod agent;
 mod dashboard;
 mod hotkey;
+mod import;
 mod log;
 mod prompt;
 mod state;
@@ -205,50 +206,6 @@ pub(crate) fn toggle_autostart(app: &tauri::AppHandle) {
             Err(e) => ui::notify(app, "OTPBar", &format!("설정을 바꾸지 못했습니다: {e}")),
         }
     }
-}
-
-/// QR 이미지를 골라 가져온다. 파일 선택은 운영체제 표준 패널을 쓴다.
-pub(crate) fn import_via_dialog(app: &tauri::AppHandle) {
-    use tauri_plugin_dialog::DialogExt;
-
-    let state = app.state::<AppState>();
-    if !state.is_unlocked() {
-        ui::notify(app, "OTPBar", "먼저 잠금을 해제하십시오.");
-        return;
-    }
-    let picked = app
-        .dialog()
-        .file()
-        .set_title("구글 OTP 내보내기 QR 또는 otpauth QR 이미지")
-        .add_filter("이미지", &["png", "jpg", "jpeg", "bmp", "webp", "tiff"])
-        .blocking_pick_files();
-    let Some(paths) = picked else { return };
-
-    let mut added = 0usize;
-    let mut lines: Vec<String> = Vec::new();
-    for p in paths {
-        let path = p.to_string();
-        match state.import(&path, false) {
-            Ok((messages, total)) => {
-                added += total;
-                lines.extend(messages);
-            }
-            Err(e) => lines.push(format!("실패: {e}")),
-        }
-    }
-    ui::refresh(app);
-    let summary = if lines.is_empty() {
-        "가져올 계정이 없습니다.".to_string()
-    } else {
-        let head: Vec<&str> = lines.iter().take(4).map(|s| s.as_str()).collect();
-        let more = if lines.len() > 4 {
-            format!("\n… 외 {}건", lines.len() - 4)
-        } else {
-            String::new()
-        };
-        format!("{}{}", head.join("\n"), more)
-    };
-    ui::notify(app, &format!("가져오기 {added}건"), &summary);
 }
 
 pub(crate) fn open_path(app: &tauri::AppHandle, path: &Path) {
