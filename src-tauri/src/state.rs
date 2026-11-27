@@ -31,6 +31,17 @@ impl AppState {
         }))))
     }
 
+    /// 시험용. 이미 준비한 금고로 상태를 만든다(설정 파일·자격증명 저장소를 건드리지 않는다).
+    #[cfg(test)]
+    pub fn with_vault(vault: Vault) -> Self {
+        AppState(Arc::new(Mutex::new(Inner {
+            vault,
+            settings: Settings::default(),
+            last_activity: Instant::now(),
+            token: String::new(),
+        })))
+    }
+
     fn lock_inner(&self) -> std::sync::MutexGuard<'_, Inner> {
         // 잠금이 오염되어도 앱을 죽이지 않는다. 금고는 자물쇠가 아니라 데이터이므로
         // 복구해서 계속 쓰는 편이 사용자에게 낫다.
@@ -180,13 +191,18 @@ impl AppState {
         inner.vault.code_for(query)
     }
 
-    pub fn import(&self, source: &str, replace: bool) -> Result<(Vec<String>, usize)> {
+    /// 이름을 묻지 않고 한꺼번에 넣는다(CLI 요청). 같은 이름은 `replace`가 아니면 건너뛴다.
+    pub fn import(&self, source: &str, replace: bool) -> Result<otpbar_core::AddReport> {
         let accounts = otpbar_core::ipc::import_source_to_accounts(source)?;
-        let total = accounts.len();
         let mut inner = self.lock_inner();
-        let messages = inner.vault.add_many(accounts, replace)?;
+        let report = inner.vault.add_many(accounts, replace)?;
         inner.last_activity = Instant::now();
-        Ok((messages, total))
+        Ok(report)
+    }
+
+    /// 새 계정에 이 이름을 붙일 수 있는지 본다(빈 이름·너무 긴 이름·중복).
+    pub fn check_name(&self, issuer: &str, name: &str) -> Result<()> {
+        self.lock_inner().vault.check_name(issuer, name)
     }
 
     pub fn add_manual(&self, new: otpbar_core::NewAccount, replace: bool) -> Result<String> {

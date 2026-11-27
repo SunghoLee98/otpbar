@@ -21,6 +21,6 @@ pub mod vault;
 pub use error::{Error, Result};
 pub use settings::Settings;
 pub use totp::Algorithm;
-pub use vault::{Account, AccountView, NewAccount, Vault};
+pub use vault::{Account, AccountView, AddReport, NewAccount, Vault};
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
